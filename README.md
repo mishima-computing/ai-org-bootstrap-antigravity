@@ -99,3 +99,15 @@ Observe the live progress by tailing the stream log:
 ```sh
 tail -f /path/to/target-workspace/.agent-runs/stream.jsonl
 ```
+
+### 5.3. Running the Speculative Parallel Demo
+
+To see a complete, plug-and-play demonstration of the speculative parallel pipeline in action:
+
+1. Run the interactive demo setup script at the root of the repository:
+   ```sh
+   python3 run_demo.py
+   ```
+2. The script will create a `demo_workspace` with multiple bugs in `math_utils.py` and failing tests in `test_math.py`.
+3. If credentials are set, it will offer to run the pipeline automatically. Otherwise, it will print the exact commands to run the speculative builder in parallel using the Gemini API or Vertex AI.
+
