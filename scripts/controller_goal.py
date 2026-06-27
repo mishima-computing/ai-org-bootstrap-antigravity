@@ -93,36 +93,19 @@ def extract_json(text: str) -> Dict[str, Any]:
     json_str = text[start:end+1]
     return json.loads(json_str)
 
-async def generate_domain_specification(repo_path: pathlib.Path, goal: str, goal_id: str, stream_log_path: pathlib.Path):
+async def run_architect_phase(repo_path: pathlib.Path, goal: str, goal_id: str, scan_data: Dict[str, Any], stream_log_path: pathlib.Path) -> Dict[str, Any]:
     """
-    Spawns a domain-specifier agent to research and write specs/domain_specification.md in the target workspace.
+    Invokes the Architect using the AntigravityCarrier to research, write specs/domain_specification.md,
+    and generate the structured task plan edit_plan.json.
     """
-    print("Invoking DomainSpecifier to research and write specs/domain_specification.md...")
+    print("Invoking Architect to research specs and build task edit plan...")
     specs_dir = repo_path / "specs"
     specs_dir.mkdir(parents=True, exist_ok=True)
     
-    carrier = AntigravityCarrier(workspace_root=str(repo_path), role_name="domain-specifier")
-    prompt = f"""Please research the user's goal: '{goal}'.
-Perform web searches using your tools to gather the exact rules, equations, layout parameters, data structures, and edge cases.
-Write a comprehensive technical specification file named 'specs/domain_specification.md' in this workspace detailing your findings.
-Do not use placeholder logic or mock data. Detail everything necessary for a perfect, authentic implementation."""
+    carrier = AntigravityCarrier(workspace_root=str(repo_path), role_name="architect")
     
-    response = ""
-    async for token in carrier.chat_stream(prompt, stream_log_path=str(stream_log_path)):
-        sys.stdout.write(token)
-        sys.stdout.flush()
-        response += token
-    print("\nDomain Specification generated successfully.")
-
-async def extract_edit_plan(repo_path: pathlib.Path, goal: str, goal_id: str, scan_data: Dict[str, Any], stream_log_path: pathlib.Path) -> Dict[str, Any]:
-    """
-    Invokes the IntentExtractor using the AntigravityCarrier to generate
-    the structured edit plan matching the edit_plan schema.
-    """
-    carrier = AntigravityCarrier(workspace_root=str(repo_path), role_name="intent-extractor")
-    
-    prompt = f"""You are the IntentExtractor.
-Your job is to read a high-level goal and a repository scan, and generate a precise, structured edit plan.
+    prompt = f"""You are the Architect.
+Your job is to read the high-level goal, perform the necessary specification research, write the spec file, and output the structured parallel task plan.
 
 High-Level Goal:
 {goal}
@@ -134,6 +117,13 @@ Tree:
 Files Context (Snippets):
 {json.dumps(scan_data['files'], indent=2)}
 
+Please perform the following operations:
+1. Research and write a comprehensive, code-ready spec file named 'specs/domain_specification.md' in the workspace. Detail all formulas, parameter tables, layouts, sound synth diagrams, and save JSON schemas. Enforce modern UX boundaries (no walkable menu grids, no static sidebars, floating HUDs, contextual popups, town hub overlays).
+2. Generate the structured task plan. Break the goal down into one or more tasks.
+   - For each task, define a list of `files_allowed_to_change` (only files that will actually be edited/created).
+   - Define a list of `verification_commands` (compilers, linters, or test suites to run after editing to prove correctness).
+   - Embed the gathered technical specifications, parameter constants, or math equations directly in the task description.
+
 Please output a valid JSON object matching the following structure:
 {{
   "goal_id": "{goal_id}",
@@ -141,22 +131,16 @@ Please output a valid JSON object matching the following structure:
   "tasks": [
     {{
       "task_id": "task_1",
-      "description": "<detailed description of what to do>",
+      "description": "<detailed description of what to do, including exact specs and parameters for this task>",
       "files_allowed_to_change": ["relative/path/to/file1", "relative/path/to/file2"],
       "verification_commands": ["pytest tests/test_file1.py", "eslint relative/path/to/file2"]
     }}
   ]
 }}
 
-Guidelines:
-1. `files_allowed_to_change` lists ONLY the files that this task needs to create or modify. Do not include files that only need to be read.
-2. `verification_commands` lists commands that can be run deterministically to verify the correctness of the change (e.g. tests, linters).
-3. The output MUST be a valid JSON block. Do not include markdown code fences or any conversational prefix/suffix.
-4. Research-First: You MUST run search queries or read local reference documentations to obtain precise mathematical formulas, exact data lists, API specifications, or configuration structures required for the goal before finalizing the task descriptions. Include these gathered specifications and parameter arrays directly inside the description of the relevant tasks so that the developer agent does not use placeholder values.
-"""
+The output MUST be a valid JSON block. Do not include markdown code fences or any conversational prefix/suffix."""
 
     response_content = ""
-    print("Streaming tokens from IntentExtractor...")
     async for token in carrier.chat_stream(prompt, stream_log_path=str(stream_log_path)):
         sys.stdout.write(token)
         sys.stdout.flush()
@@ -214,16 +198,12 @@ async def main():
         print(f"No active goal state found for {goal_id}. Starting fresh.")
         
     if not state:
-        # Generate Domain Specification first
-        await generate_domain_specification(repo_path, args.goal, goal_id, stream_log_path)
-
-        # Scan target repository
+        # Scan target repository first
         print("Scanning repository...")
         scan_data = deterministic_scan(repo_path)
         
-        # Generate edit plan using IntentExtractor
-        print("Invoking IntentExtractor to build edit plan...")
-        edit_plan = await extract_edit_plan(repo_path, args.goal, goal_id, scan_data, stream_log_path)
+        # Generate Specifications and Edit Plan using the Architect
+        edit_plan = await run_architect_phase(repo_path, args.goal, goal_id, scan_data, stream_log_path)
         
         state = {
             "goal_id": goal_id,
@@ -252,7 +232,7 @@ async def main():
     for t in tasks:
         formatted_tasks.append({
             "id": t.get("task_id"),
-            "role": "implementer",
+            "role": "developer",
             "prompt": f"Task Objective: {t.get('description')}\n\nPlease implement the changes requested in the objective.",
             "allowed_paths": t.get("files_allowed_to_change", []),
             "test_commands": t.get("verification_commands", [])
@@ -265,7 +245,7 @@ async def main():
         goal_id=goal_id,
         tasks=formatted_tasks,
         integration_test_commands=None,  # Integration-level tests can be added if defined
-        integration_role="implementer",
+        integration_role="verifier",
         stream_log_path=str(stream_log_path)
     )
     

@@ -346,7 +346,7 @@ class PipelineCoordinator:
         goal_id: str,
         tasks: List[Dict[str, Any]],
         integration_test_commands: Optional[List[str]] = None,
-        integration_role: str = "implementer",
+        integration_role: str = "developer",
         stream_log_path: Optional[str] = None
     ) -> Dict[str, Any]:
         """
@@ -367,7 +367,7 @@ class PipelineCoordinator:
         # Define the isolated task execution runner
         async def run_task_isolated(task_info: Dict[str, Any]) -> Dict[str, Any]:
             task_id = task_info.get("id") or task_info.get("task_id") or f"task-{uuid.uuid4().hex[:8]}"
-            role = task_info.get("role") or task_info.get("role_name") or "implementer"
+            role = task_info.get("role") or task_info.get("role_name") or "developer"
             prompt = task_info.get("prompt") or task_info.get("contract_prompt")
             allowed_paths = task_info.get("allowed_paths") or []
             test_commands = task_info.get("test_commands") or task_info.get("verification_commands") or []
@@ -685,55 +685,31 @@ class PipelineCoordinator:
         # Read the domain specification
         spec_content = spec_file.read_text(encoding="utf-8")
         
-        # 1. Invoke SpecAuditor
-        auditor_prompt = (
-            f"### Specification Compliance Audit\n"
-            f"You are the SpecAuditor. Review the changes made for Goal '{goal_id}' against the Domain Specification.\n\n"
+        # 1. Invoke Verifier
+        verifier_prompt = (
+            f"### Integrated Code Verification Audit\n"
+            f"You are the Verifier. Review the changes made for Goal '{goal_id}' against the Domain Specification.\n\n"
             f"**Domain Specification:**\n```markdown\n{spec_content}\n```\n\n"
             f"**Modified Files:**\n{modified_files}\n\n"
-            f"Analyze if the implementation fully complies with the specification, or if there are shortcuts, missing formulas, or placeholders.\n"
-            f"Output 'PASS' if fully compliant, or 'FAIL' followed by a detailed bulleted list of missing details."
+            f"Check functional correctness (math, tables, spell behaviors) and visual UX alignment (claymorphic styles, smooth transitions, contextual popups, no static sidebars, no walkable menu grids).\n"
+            f"Output 'STATUS: PASS' if fully compliant and verified, or 'STATUS: FAIL' followed by a detailed list of missing details or bugs."
         )
         
-        carrier_spec = AntigravityCarrier(workspace_root=str(integration_wt), role_name="spec-auditor")
-        spec_tokens = []
-        async for token in carrier_spec.chat_stream(auditor_prompt, stream_log_path=stream_log_path):
-            spec_tokens.append(token)
-        spec_result = "".join(spec_tokens)
-        
-        # 2. Invoke AestheticReviewer
-        reviewer_prompt = (
-            f"### Aesthetic & UI/UX Audit\n"
-            f"You are the AestheticReviewer. Review the visual, layout, and UX feel of the changes made for Goal '{goal_id}' against the Domain Specification.\n\n"
-            f"**Domain Specification:**\n```markdown\n{spec_content}\n```\n\n"
-            f"Review the generated code (HTML/CSS/JS) to detect visual defects, missing layout structures, or aesthetic placeholders.\n"
-            f"Output 'PASS' if visual/UX details are correct, or 'FAIL' followed by specific layout corrections."
-        )
-        
-        carrier_aes = AntigravityCarrier(workspace_root=str(integration_wt), role_name="aesthetic-reviewer")
-        aes_tokens = []
-        async for token in carrier_aes.chat_stream(reviewer_prompt, stream_log_path=stream_log_path):
-            aes_tokens.append(token)
-        aes_result = "".join(aes_tokens)
+        carrier_verifier = AntigravityCarrier(workspace_root=str(integration_wt), role_name="verifier")
+        verifier_tokens = []
+        async for token in carrier_verifier.chat_stream(verifier_prompt, stream_log_path=stream_log_path):
+            verifier_tokens.append(token)
+        verifier_result = "".join(verifier_tokens)
 
         # Check results
-        spec_passed = "PASS" in spec_result.split("\n")[0] or "PASS" in spec_result[:10]
-        aes_passed = "PASS" in aes_result.split("\n")[0] or "PASS" in aes_result[:10]
+        passed = "STATUS: PASS" in verifier_result
         
-        if spec_passed and aes_passed:
-            self.logger.info("[Integration Auditor] All specification audits PASSED!")
+        if passed:
+            self.logger.info("[Integration Auditor] Integrated code verification PASSED!")
             return {"success": True, "feedback": ""}
         
-        # Combine failures
-        feedback = []
-        if not spec_passed:
-            feedback.append(f"### SpecAuditor Findings:\n{spec_result}")
-        if not aes_passed:
-            feedback.append(f"### AestheticReviewer Findings:\n{aes_result}")
-            
-        combined_feedback = "\n\n".join(feedback)
-        self.logger.warning(f"[Integration Auditor] Audits failed:\n{combined_feedback}")
-        return {"success": False, "feedback": combined_feedback}
+        self.logger.warning(f"[Integration Auditor] Integrated verification failed:\n{verifier_result}")
+        return {"success": False, "feedback": verifier_result}
 
 
 async def main():
@@ -741,7 +717,7 @@ async def main():
     parser.add_argument("--repo", required=True, help="Path to the target repository/workspace")
     parser.add_argument("--goal-id", default="goal-1", help="Goal identifier (for parallel execution)")
     parser.add_argument("--mode", choices=["serial", "parallel"], default="serial", help="Execution mode")
-    parser.add_argument("--role", default="implementer", help="Specialized agent role name")
+    parser.add_argument("--role", default="developer", help="Specialized agent role name")
     parser.add_argument("--prompt", help="Contract prompt (serial mode only)")
     parser.add_argument("--allowed-paths", default="", help="Comma-separated allowed file paths (serial mode only)")
     parser.add_argument("--test-commands", default="", help="Comma-separated verification commands (serial mode only)")
