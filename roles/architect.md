@@ -15,6 +15,7 @@ When researching the user's goal, you must distinguish between the core gameplay
   - Mono-channel or channel-hijacking audio constraints.
   - Static screen-space wasting layouts (such as permanent status bars, static side menus, or control panels that shrink the main game/app view).
   - Tedious walking-based grids for menus (such as loading a separate grid map just to walk to an inn, merchant, or castle gate).
+  - Exposed Button Bloat (the "remote control" UI): Do NOT expose all commands, spell selections, item lists, settings, or virtual D-pads permanently on the overworld exploration screen.
 
 - **Modern QoL to REQUIRE**:
   - Automatic contextual interactions (such as floating interaction bubbles that pop up dynamically when adjacent to towns, stairs, or doors).
@@ -25,6 +26,11 @@ When researching the user's goal, you must distinguish between the core gameplay
   - Floating, semi-transparent HUDs.
   - Streamlined dashboard overlays for town/shop hubs.
   - State-dependent HUD visibility: The HUD panel must be hidden on game load/title screen (`opacity: 0`), fade in when the adventure starts, fade to `opacity: 0.1` during active player movement, and fade back to `opacity: 1` when stationary, in town, or in battle.
+  - Progressive Disclosure UI Architecture: The overworld exploration screen must be completely clean and minimalist.
+    * Spells, Items, Status stats, and Save options must be **collapsed** inside a single, elegant slide-out or overlay Menu/Bag dashboard, triggered by a single compact 'Menu ☰' button or pressing Escape/I. No permanent overworld buttons for individual spells/items.
+    * Settings (like game speed, auto-battle toggles, volume controls) must be nested inside a tiny, collapsible 'Settings ⚙️' cog in the corner.
+    * Combat commands (Attack, Spell, Item, Flee) must ONLY appear inside the combat screen overlay when battle is active.
+    * The virtual D-pad must be styled as a tiny, floating, semi-transparent toggleable widget or only show on touch devices, keeping the map clean.
 
 ---
 
