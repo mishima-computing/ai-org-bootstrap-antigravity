@@ -270,13 +270,13 @@ async def main():
                     print("\nFinal Specification Audit passed successfully!")
                     break
                 
-                print(f"\nSpecification Audit failed. Issues found:\n{audit_res.get('message')}")
+                print(f"\nSpecification Audit failed. Issues found:\n{audit_res.get('feedback')}")
                 
                 if audit_attempts >= max_audit_retries:
                     print("\nReached max audit retries. Halting.")
                     success = False
                     state["status"] = "failed"
-                    store.save(goal_id, state, f"Final Specification Audit failed: {audit_res.get('message')}")
+                    store.save(goal_id, state, f"Final Specification Audit failed: {audit_res.get('feedback')}")
                     break
                     
                 print(f"\nLaunching Developer to repair integration and specification issues (CEGAR Loop)...")
@@ -284,7 +284,7 @@ async def main():
                     role_name="developer",
                     contract_prompt=(
                         f"Your task is to fix the integration and specification issues reported by the QA auditor.\n\n"
-                        f"### QA AUDIT FINDINGS:\n{audit_res.get('message')}\n\n"
+                        f"### QA AUDIT FINDINGS:\n{audit_res.get('feedback')}\n\n"
                         f"Please modify index.html, style.css, game.js, and audio.js as needed to resolve these issues completely. "
                         f"Ensure all external scripts are properly imported (do NOT put all logic inside inline index.html scripts), RPG formulas match specifications, keybindings are corrected, and UI panels are properly collapsed inside the #menu-overlay."
                     ),
