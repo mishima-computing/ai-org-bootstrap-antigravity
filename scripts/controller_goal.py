@@ -164,6 +164,7 @@ async def main():
     parser.add_argument("--goal", required=True, help="High-level goal description")
     parser.add_argument("--goal-id", help="Optional custom goal ID to track or resume")
     parser.add_argument("--stream-log", help="Optional path to log the execution stream events")
+    parser.add_argument("--mode", choices=["serial", "parallel"], default="parallel", help="Task execution mode (default: parallel)")
     args = parser.parse_args()
     
     repo_path = pathlib.Path(args.repo).resolve()
@@ -227,39 +228,75 @@ async def main():
     
     tasks = state["edit_plan"].get("tasks", [])
     
-    # Format tasks for the PipelineCoordinator parallel execution API
-    formatted_tasks = []
-    for t in tasks:
-        formatted_tasks.append({
-            "id": t.get("task_id"),
-            "role": "developer",
-            "prompt": f"Task Objective: {t.get('description')}\n\nPlease implement the changes requested in the objective.",
-            "allowed_paths": t.get("files_allowed_to_change", []),
-            "test_commands": t.get("verification_commands", [])
-        })
-        
-    print(f"\nExecuting {len(formatted_tasks)} tasks in parallel (Speculative Execution)...")
-    
-    # Execute the speculative parallel pipeline
-    res = await pipeline.execute_tasks_parallel(
-        goal_id=goal_id,
-        tasks=formatted_tasks,
-        integration_test_commands=None,  # Integration-level tests can be added if defined
-        integration_role="verifier",
-        stream_log_path=str(stream_log_path)
-    )
-    
-    success = res["success"]
-    if success:
-        print("\nAll speculative tasks merged and verified successfully!")
-        state["tasks_completed"] = [t.get("task_id") for t in tasks]
-        state["status"] = "completed"
-        store.save(goal_id, state, "Speculative parallel execution completed successfully")
-    else:
-        print(f"\nParallel execution failed: {res.get('message')}")
-        state["status"] = "failed"
-        store.save(goal_id, state, f"Parallel execution failed: {res.get('error')}")
+    success = True
+    if args.mode == "serial":
+        print(f"\nExecuting {len(tasks)} tasks sequentially (Serial Execution)...")
+        completed_tasks = []
+        for i, t in enumerate(tasks):
+            task_id = t.get("task_id")
+            print(f"\n--- Running Task {i+1}/{len(tasks)}: {task_id} ---")
             
+            res = await pipeline.run(
+                role_name="developer",
+                contract_prompt=f"Task Objective: {t.get('description')}\n\nPlease implement the changes requested in the objective.",
+                allowed_paths=t.get("files_allowed_to_change", []),
+                test_commands=t.get("verification_commands", []),
+                stream_log_path=str(stream_log_path)
+            )
+            
+            if not res["success"]:
+                print(f"\nTask {task_id} failed: {res.get('error')}")
+                success = False
+                state["status"] = "failed"
+                store.save(goal_id, state, f"Task {task_id} failed: {res.get('error')}")
+                break
+                
+            print(f"Task {task_id} completed and merged successfully!")
+            completed_tasks.append(task_id)
+            state["tasks_completed"] = completed_tasks
+            store.save(goal_id, state, f"Task {task_id} completed successfully")
+            
+        if success:
+            print("\nAll tasks completed sequentially. Running final Specification Audit...")
+            audit_res = await pipeline._run_specification_audits(repo_path, goal_id, str(stream_log_path))
+            if not audit_res["success"]:
+                print(f"\nFinal Specification Audit failed: {audit_res.get('message')}")
+                success = False
+                state["status"] = "failed"
+                store.save(goal_id, state, f"Final Specification Audit failed: {audit_res.get('message')}")
+            else:
+                print("\nFinal Specification Audit passed successfully!")
+    else:
+        # Format tasks for the PipelineCoordinator parallel execution API
+        formatted_tasks = []
+        for t in tasks:
+            formatted_tasks.append({
+                "id": t.get("task_id"),
+                "role": "developer",
+                "prompt": f"Task Objective: {t.get('description')}\n\nPlease implement the changes requested in the objective.",
+                "allowed_paths": t.get("files_allowed_to_change", []),
+                "test_commands": t.get("verification_commands", [])
+            })
+            
+        print(f"\nExecuting {len(formatted_tasks)} tasks in parallel (Speculative Execution)...")
+        res = await pipeline.execute_tasks_parallel(
+            goal_id=goal_id,
+            tasks=formatted_tasks,
+            integration_test_commands=None,
+            integration_role="verifier",
+            stream_log_path=str(stream_log_path)
+        )
+        success = res["success"]
+        if success:
+            print("\nAll speculative tasks merged and verified successfully!")
+            state["tasks_completed"] = [t.get("task_id") for t in tasks]
+            state["status"] = "completed"
+            store.save(goal_id, state, "Speculative parallel execution completed successfully")
+        else:
+            print(f"\nParallel execution failed: {res.get('message')}")
+            state["status"] = "failed"
+            store.save(goal_id, state, f"Parallel execution failed: {res.get('error')}")
+                
     if success:
         print(f"\nAll tasks completed! Goal {goal_id} achieved successfully.")
         state["status"] = "completed"
