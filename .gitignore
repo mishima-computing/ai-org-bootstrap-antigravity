@@ -7,3 +7,4 @@ __pycache__/
 .goals/*.json
 demos/
 tests/test_game.js
+clay_dq_autonomous/
