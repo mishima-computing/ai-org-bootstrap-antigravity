@@ -56,6 +56,7 @@ class AntigravityCarrier:
             "security-ci-action-writer",
             "nonfunctional-ci-action-writer"
         ]
+        is_write_role = is_tool_equipped
         
         # Check environment variables for Vertex AI configuration
         vertex = os.environ.get("USE_VERTEX", "").lower() in ("true", "1")
@@ -77,6 +78,52 @@ class AntigravityCarrier:
             config_kwargs["project"] = project
             config_kwargs["location"] = location
             
+        # Check if we should use agy CLI fallback
+        gemini_key = os.environ.get("GEMINI_API_KEY")
+        has_vertex = project and location
+        
+        if not gemini_key and not has_vertex:
+            # Fall back to agy CLI!
+            full_prompt = f"SYSTEM INSTRUCTIONS:\n{system_instructions}\n\nUSER PROMPT:\n{prompt}"
+            cmd = [
+                "/home/terum/.local/bin/agy",
+                "--add-dir", str(self.workspace_root),
+                "--dangerously-skip-permissions",
+                "--print", full_prompt
+            ]
+            
+            # Run the command asynchronously and stream stdout
+            proc = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT
+            )
+            
+            try:
+                while True:
+                    line = await proc.stdout.readline()
+                    if not line:
+                        break
+                    token = line.decode("utf-8", errors="ignore")
+                    # Log token
+                    if stream_log_path:
+                        self._append_stream_log(stream_log_path, {
+                            "type": "token",
+                            "role": self.role_name,
+                            "content": token
+                        })
+                    yield token
+            finally:
+                if proc.returncode is None:
+                    try:
+                        proc.terminate()
+                        await proc.wait()
+                    except ProcessLookupError:
+                        pass
+                if is_write_role:
+                    self._enforce_scope()
+            return
+
         config = LocalAgentConfig(**config_kwargs)
             
         # Spawn the agent using the async context manager
