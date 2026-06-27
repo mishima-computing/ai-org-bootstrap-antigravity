@@ -44,17 +44,19 @@ class AntigravityCarrier:
         and enforces post-run file scope boundaries.
         """
         system_instructions = self._load_system_instructions()
+        system_instructions += (
+            f"\n\nCRITICAL DIRECTORY CONSTRAINT:\n"
+            f"Your active project root is the CURRENT DIRECTORY. The absolute path of this project root is: '{self.workspace_root}'. "
+            f"You must ONLY read, write, or modify files located inside this specific directory: '{self.workspace_root}'. "
+            f"Do NOT write to or modify any files in '/home/terum/.gemini/antigravity-cli/scratch/' or any other directory outside '{self.workspace_root}'. "
+            f"Always use relative paths (e.g. 'index.html', not '/home/terum/.gemini/antigravity-cli/scratch/index.html') when using file writing tools."
+        )
         
         # Determine if this role should be equipped with tools (search, terminal, write)
         is_tool_equipped = self.role_name in [
-            "domain-specifier",
-            "intent-extractor",
-            "implementer",
-            "spec-auditor",
-            "aesthetic-reviewer",
-            "functional-ci-action-writer",
-            "security-ci-action-writer",
-            "nonfunctional-ci-action-writer"
+            "architect",
+            "developer",
+            "verifier"
         ]
         is_write_role = is_tool_equipped
         
