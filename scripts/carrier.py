@@ -211,6 +211,10 @@ class AntigravityCarrier:
                     
             violations = []
             for mf in modified_files:
+                # Ignore modifications to dependencies, git metadata, and goal records
+                if any(x in mf.parts for x in ["node_modules", ".goals", ".git", ".worktrees"]):
+                    continue
+                    
                 is_allowed = False
                 for ap in self.allowed_paths:
                     try:
