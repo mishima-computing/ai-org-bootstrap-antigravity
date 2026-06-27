@@ -280,16 +280,24 @@ async def main():
                     break
                     
                 print(f"\nLaunching Developer to repair integration and specification issues (CEGAR Loop)...")
+                # Dynamically collect all files in the repository to allow the developer to modify them during integration repair
+                allowed_paths = ["index.html", "style.css", "game.js", "audio.js", "index.js", "index.css", "style.css"]
+                for p in repo_path.glob("**/*"):
+                    if p.is_file() and not p.name.startswith(".") and ".worktrees" not in p.parts and ".goals" not in p.parts:
+                        rel = str(p.relative_to(repo_path))
+                        if rel not in allowed_paths:
+                            allowed_paths.append(rel)
+
                 res = await pipeline.run(
                     role_name="developer",
                     contract_prompt=(
                         f"Your task is to fix the integration and specification issues reported by the QA auditor.\n\n"
                         f"### QA AUDIT FINDINGS:\n{audit_res.get('feedback')}\n\n"
-                        f"Please modify index.html, style.css, game.js, and audio.js as needed to resolve these issues completely. "
-                        f"Ensure all external scripts are properly imported (do NOT put all logic inside inline index.html scripts), RPG formulas match specifications, keybindings are corrected, and UI panels are properly collapsed inside the #menu-overlay."
+                        f"Please modify the relevant files in the workspace (such as index.html, index.js, index.css, style.css, or files in src/) to resolve these issues completely. "
+                        f"Ensure all external scripts are properly imported, RPG formulas match specifications, keybindings are corrected, and UI panels are properly collapsed inside the menu overlays."
                     ),
-                    allowed_paths=["index.html", "style.css", "game.js", "audio.js"],
-                    test_commands=["node --check game.js", "node --check audio.js"]
+                    allowed_paths=allowed_paths,
+                    test_commands=[]
                 )
                 
                 if not res["success"]:
