@@ -93,6 +93,27 @@ def extract_json(text: str) -> Dict[str, Any]:
     json_str = text[start:end+1]
     return json.loads(json_str)
 
+async def generate_domain_specification(repo_path: pathlib.Path, goal: str, goal_id: str, stream_log_path: pathlib.Path):
+    """
+    Spawns a domain-specifier agent to research and write specs/domain_specification.md in the target workspace.
+    """
+    print("Invoking DomainSpecifier to research and write specs/domain_specification.md...")
+    specs_dir = repo_path / "specs"
+    specs_dir.mkdir(parents=True, exist_ok=True)
+    
+    carrier = AntigravityCarrier(workspace_root=str(repo_path), role_name="domain-specifier")
+    prompt = f"""Please research the user's goal: '{goal}'.
+Perform web searches using your tools to gather the exact rules, equations, layout parameters, data structures, and edge cases.
+Write a comprehensive technical specification file named 'specs/domain_specification.md' in this workspace detailing your findings.
+Do not use placeholder logic or mock data. Detail everything necessary for a perfect, authentic implementation."""
+    
+    response = ""
+    async for token in carrier.chat_stream(prompt, stream_log_path=str(stream_log_path)):
+        sys.stdout.write(token)
+        sys.stdout.flush()
+        response += token
+    print("\nDomain Specification generated successfully.")
+
 async def extract_edit_plan(repo_path: pathlib.Path, goal: str, goal_id: str, scan_data: Dict[str, Any], stream_log_path: pathlib.Path) -> Dict[str, Any]:
     """
     Invokes the IntentExtractor using the AntigravityCarrier to generate
@@ -193,6 +214,9 @@ async def main():
         print(f"No active goal state found for {goal_id}. Starting fresh.")
         
     if not state:
+        # Generate Domain Specification first
+        await generate_domain_specification(repo_path, args.goal, goal_id, stream_log_path)
+
         # Scan target repository
         print("Scanning repository...")
         scan_data = deterministic_scan(repo_path)

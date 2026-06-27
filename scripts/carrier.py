@@ -47,8 +47,11 @@ class AntigravityCarrier:
         
         # Determine if this role should be equipped with tools (search, terminal, write)
         is_tool_equipped = self.role_name in [
+            "domain-specifier",
             "intent-extractor",
             "implementer",
+            "spec-auditor",
+            "aesthetic-reviewer",
             "functional-ci-action-writer",
             "security-ci-action-writer",
             "nonfunctional-ci-action-writer"

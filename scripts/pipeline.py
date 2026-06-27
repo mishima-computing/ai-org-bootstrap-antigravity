@@ -588,6 +588,54 @@ class PipelineCoordinator:
             else:
                 self.logger.info("[Integration] No integration tests specified. Proceeding.")
 
+            # 3. Run Spec & Aesthetic Compliance Audits
+            audit_res = await self._run_specification_audits(integration_wt, goal_id, stream_log_path)
+            if not audit_res["success"]:
+                self.logger.warning("[Integration] Specification compliance audits failed. Initiating spec-repair CEGAR loop...")
+                
+                spec_resolved = False
+                spec_attempts = 0
+                spec_feedback = audit_res["feedback"]
+                
+                while spec_attempts < self.max_retries:
+                    spec_attempts += 1
+                    self.logger.info(f"[Integration] Spec Repair Attempt {spec_attempts}/{self.max_retries}")
+                    
+                    spec_repair_prompt = (
+                        f"### Specification Audit Deficiencies\n"
+                        f"The integrated implementation has failed our quality compliance audit for Goal '{goal_id}'.\n\n"
+                        f"**Auditor Feedback:**\n{spec_feedback}\n\n"
+                        f"Please rewrite and adjust the code files to fully close these gaps, remove shortcuts/placeholders, and satisfy the specifications. Do not skip any features."
+                    )
+                    
+                    carrier = AntigravityCarrier(
+                        workspace_root=str(integration_wt),
+                        role_name=integration_role
+                    )
+                    
+                    tokens = []
+                    try:
+                        async for token in carrier.chat_stream(spec_repair_prompt, stream_log_path=stream_log_path):
+                            tokens.append(token)
+                    except Exception as e:
+                        self.logger.error(f"[Integration] Spec repair agent failed: {e}")
+                        continue
+
+                    # Re-run audits
+                    audit_res = await self._run_specification_audits(integration_wt, goal_id, stream_log_path)
+                    if audit_res["success"]:
+                        self.logger.info("[Integration] Specification audits passed successfully after repair.")
+                        spec_resolved = True
+                        await self._commit_worktree(integration_wt, integration_role, message_prefix="Spec compliance repairs")
+                        break
+                    else:
+                        spec_feedback = audit_res["feedback"]
+                        
+                if not spec_resolved:
+                    raise RuntimeError("Failed to satisfy specification compliance audits after maximum retries.")
+            else:
+                self.logger.info("[Integration] All specification compliance audits passed on first run.")
+
             # Commit the final integrated state (if anything is unstaged)
             integration_commit_hash = await self._commit_worktree(integration_wt, integration_role, message_prefix="Final integration")
             integration_success = True
@@ -616,6 +664,76 @@ class PipelineCoordinator:
                 "error": integration_error,
                 "message": f"Parallel integration failed: {integration_error}"
             }
+
+    async def _run_specification_audits(self, integration_wt: pathlib.Path, goal_id: str, stream_log_path: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Runs SpecAuditor and AestheticReviewer on the final integrated files,
+        comparing them against specs/domain_specification.md.
+        Returns a dict with 'success' (bool) and 'feedback' (str).
+        """
+        spec_file = integration_wt / "specs" / "domain_specification.md"
+        if not spec_file.exists():
+            self.logger.info("[Integration Auditor] No specs/domain_specification.md found. Skipping specification audits.")
+            return {"success": True, "feedback": ""}
+
+        self.logger.info("[Integration Auditor] Initiating SpecAuditor compliance checks...")
+        
+        # Gather modified files list to show the auditor
+        diff_res = await self._run_git_cmd(["git", "diff", "--name-only", "HEAD~1"], integration_wt)
+        modified_files = diff_res.stdout.strip()
+        
+        # Read the domain specification
+        spec_content = spec_file.read_text(encoding="utf-8")
+        
+        # 1. Invoke SpecAuditor
+        auditor_prompt = (
+            f"### Specification Compliance Audit\n"
+            f"You are the SpecAuditor. Review the changes made for Goal '{goal_id}' against the Domain Specification.\n\n"
+            f"**Domain Specification:**\n```markdown\n{spec_content}\n```\n\n"
+            f"**Modified Files:**\n{modified_files}\n\n"
+            f"Analyze if the implementation fully complies with the specification, or if there are shortcuts, missing formulas, or placeholders.\n"
+            f"Output 'PASS' if fully compliant, or 'FAIL' followed by a detailed bulleted list of missing details."
+        )
+        
+        carrier_spec = AntigravityCarrier(workspace_root=str(integration_wt), role_name="spec-auditor")
+        spec_tokens = []
+        async for token in carrier_spec.chat_stream(auditor_prompt, stream_log_path=stream_log_path):
+            spec_tokens.append(token)
+        spec_result = "".join(spec_tokens)
+        
+        # 2. Invoke AestheticReviewer
+        reviewer_prompt = (
+            f"### Aesthetic & UI/UX Audit\n"
+            f"You are the AestheticReviewer. Review the visual, layout, and UX feel of the changes made for Goal '{goal_id}' against the Domain Specification.\n\n"
+            f"**Domain Specification:**\n```markdown\n{spec_content}\n```\n\n"
+            f"Review the generated code (HTML/CSS/JS) to detect visual defects, missing layout structures, or aesthetic placeholders.\n"
+            f"Output 'PASS' if visual/UX details are correct, or 'FAIL' followed by specific layout corrections."
+        )
+        
+        carrier_aes = AntigravityCarrier(workspace_root=str(integration_wt), role_name="aesthetic-reviewer")
+        aes_tokens = []
+        async for token in carrier_aes.chat_stream(reviewer_prompt, stream_log_path=stream_log_path):
+            aes_tokens.append(token)
+        aes_result = "".join(aes_tokens)
+
+        # Check results
+        spec_passed = "PASS" in spec_result.split("\n")[0] or "PASS" in spec_result[:10]
+        aes_passed = "PASS" in aes_result.split("\n")[0] or "PASS" in aes_result[:10]
+        
+        if spec_passed and aes_passed:
+            self.logger.info("[Integration Auditor] All specification audits PASSED!")
+            return {"success": True, "feedback": ""}
+        
+        # Combine failures
+        feedback = []
+        if not spec_passed:
+            feedback.append(f"### SpecAuditor Findings:\n{spec_result}")
+        if not aes_passed:
+            feedback.append(f"### AestheticReviewer Findings:\n{aes_result}")
+            
+        combined_feedback = "\n\n".join(feedback)
+        self.logger.warning(f"[Integration Auditor] Audits failed:\n{combined_feedback}")
+        return {"success": False, "feedback": combined_feedback}
 
 
 async def main():
