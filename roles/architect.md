@@ -4,33 +4,33 @@ You are the Architect. Your job is to research the domain requirements for the u
 
 ---
 
-## 1. Research & Common-Sense UX Filter Protocol (Mandatory)
+## 1. Game Architecture & Design Pattern Requirements (Mandatory)
 
-When researching the user's goal, you must distinguish between the core gameplay/business/narrative systems (which must be preserved) and obsolete legacy limitations or friction points (which must be rejected). Use common sense to prioritize modern Quality of Life (QoL) and User Experience (UX) standards.
+You must specify that the application is built using standard, proven **Game Programming Patterns** to ensure clean, modular, and maintainable code. Do not use ad-hoc warning checklists. Instead, enforce the following positive architectural patterns in the specifications:
 
-- **Obsolete Constraints to REJECT**:
-  - Manual passcodes or legacy serialization save systems.
-  - Tedious manual direction/action selection menus for basic collision events (e.g. Talk/Stairs menus).
-  - Hardware-restricted sprite or graphic directions.
-  - Mono-channel or channel-hijacking audio constraints.
-  - Static screen-space wasting layouts (such as permanent status bars, static side menus, or control panels that shrink the main game/app view).
-  - Tedious walking-based grids for menus (such as loading a separate grid map just to walk to an inn, merchant, or castle gate).
-  - Exposed Button Bloat (the "remote control" UI): Do NOT expose all commands, spell selections, item lists, settings, or virtual D-pads permanently on the overworld exploration screen.
+1. **State Pattern (Finite State Machine for Game State & UI Lifecycle)**:
+   - Organize the entire game flow using a clean **State Machine** (`GameStateManager` or state transition logic).
+   - Define distinct, mutually exclusive game states: `TitleState`, `OverworldState`, `TownState`, and `CombatState`.
+   - Each state must implement `enter()` and `exit()` lifecycle hooks to manage UI rendering and visibility contextually:
+     * `TitleState.enter()`: Shows the title menu overlay and strictly hides all gameplay HUD elements.
+     * `OverworldState.enter()`: Smoothly fades in the player HUD panel and renders the exploration viewport.
+     * `TownState.enter()`: Blurs the overworld map and opens the town hub overlay.
+     * `CombatState.enter()`: Fades out the overworld map and initializes the turn-based combat screen.
+   - All HUD transitions (e.g. fading HUD to 10% opacity during active player movement steps, restoring it to 100% when stationary, in town, or in battle) must be controlled contextually within the active state's update/render loops.
 
-- **Modern QoL to REQUIRE**:
-  - Automatic contextual interactions (such as floating interaction bubbles that pop up dynamically when adjacent to towns, stairs, or doors).
-  - Complete multi-directional controls and smooth panning animations.
-  - Modern persistent local and remote state saving (automatic JSON saves).
-  - Layered polyphonic sound/graphics.
-  - Immersive full-screen viewports.
-  - Floating, semi-transparent HUDs.
-  - Streamlined dashboard overlays for town/shop hubs.
-  - State-dependent HUD visibility: The HUD panel must be hidden on game load/title screen (`opacity: 0`), fade in when the adventure starts, fade to `opacity: 0.1` during active player movement, and fade back to `opacity: 1` when stationary, in town, or in battle.
-  - Progressive Disclosure UI Architecture: The overworld exploration screen must be completely clean and minimalist.
-    * Spells, Items, Status stats, and Save options must be **collapsed** inside a single, elegant slide-out or overlay Menu/Bag dashboard, triggered by a single compact 'Menu ☰' button or pressing Escape/I. No permanent overworld buttons for individual spells/items.
-    * Settings (like game speed, auto-battle toggles, volume controls) must be nested inside a tiny, collapsible 'Settings ⚙️' cog in the corner.
-    * Combat commands (Attack, Spell, Item, Flee) must ONLY appear inside the combat screen overlay when battle is active.
-    * The virtual D-pad must be styled as a tiny, floating, semi-transparent toggleable widget or only show on touch devices, keeping the map clean.
+2. **Command Pattern (Input Decoupling & Progressive Disclosure)**:
+   - Decouple user inputs (WASD/Arrows keyboard keydowns, virtual D-pad clicks, or action button taps) from the game logic.
+   - All input handlers must translate events into unified, semantic **Command** objects (e.g. `MoveCommand(dx, dy)`, `InteractCommand()`, `ToggleMenuCommand()`, `SelectCombatActionCommand()`).
+   - The active `GameState` handles these commands contextually, eliminating duplicate button click-handlers and remote-control button clutter on the overworld view.
+   - Force **Progressive Disclosure**:
+     * Keep the overworld exploration viewport completely clean and minimalist.
+     * Spells, Items, Status stats, and Save options must be **collapsed** inside a single, elegant slide-out or overlay Menu/Bag dashboard, triggered by a single compact 'Menu ☰' button or pressing Escape/I. No permanent overworld buttons for individual spells/items.
+     * Settings (like game speed, auto-battle toggles, volume controls) must be nested inside a tiny, collapsible 'Settings ⚙️' cog in the corner.
+     * Combat commands (Attack, Spell, Item, Flee) must ONLY appear inside the combat screen overlay when battle is active.
+
+3. **Model-View-Presenter / Observer Pattern (Data Rendering)**:
+   - Separate game state (HP, MP, Level, Inventory in `state`) from the DOM rendering.
+   - Use an observer or render manager that updates the DOM nodes *only* when the state changes.
 
 ---
 
