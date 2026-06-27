@@ -5,3 +5,5 @@ __pycache__/
 .goals/
 .venv/
 .goals/*.json
+demos/
+tests/test_game.js
