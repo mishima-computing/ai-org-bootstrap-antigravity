@@ -6,6 +6,7 @@ import json
 import pathlib
 import sys
 from typing import Any, Dict
+import uuid
 
 # Ensure the repository root is in the python path
 repo_root = pathlib.Path(__file__).parent.parent.resolve()
@@ -258,14 +259,47 @@ async def main():
             
         if success:
             print("\nAll tasks completed sequentially. Running final Specification Audit...")
-            audit_res = await pipeline._run_specification_audits(repo_path, goal_id, str(stream_log_path))
-            if not audit_res["success"]:
-                print(f"\nFinal Specification Audit failed: {audit_res.get('message')}")
-                success = False
-                state["status"] = "failed"
-                store.save(goal_id, state, f"Final Specification Audit failed: {audit_res.get('message')}")
-            else:
-                print("\nFinal Specification Audit passed successfully!")
+            audit_attempts = 0
+            max_audit_retries = 3
+            while audit_attempts < max_audit_retries:
+                audit_attempts += 1
+                print(f"\n--- Running Specification Audit Attempt {audit_attempts}/{max_audit_retries} ---")
+                audit_res = await pipeline._run_specification_audits(repo_path, goal_id, str(stream_log_path))
+                
+                if audit_res["success"]:
+                    print("\nFinal Specification Audit passed successfully!")
+                    break
+                
+                print(f"\nSpecification Audit failed. Issues found:\n{audit_res.get('message')}")
+                
+                if audit_attempts >= max_audit_retries:
+                    print("\nReached max audit retries. Halting.")
+                    success = False
+                    state["status"] = "failed"
+                    store.save(goal_id, state, f"Final Specification Audit failed: {audit_res.get('message')}")
+                    break
+                    
+                print(f"\nLaunching Developer to repair integration and specification issues (CEGAR Loop)...")
+                res = await pipeline.run(
+                    role_name="developer",
+                    contract_prompt=(
+                        f"Your task is to fix the integration and specification issues reported by the QA auditor.\n\n"
+                        f"### QA AUDIT FINDINGS:\n{audit_res.get('message')}\n\n"
+                        f"Please modify index.html, style.css, game.js, and audio.js as needed to resolve these issues completely. "
+                        f"Ensure all external scripts are properly imported (do NOT put all logic inside inline index.html scripts), RPG formulas match specifications, keybindings are corrected, and UI panels are properly collapsed inside the #menu-overlay."
+                    ),
+                    allowed_paths=["index.html", "style.css", "game.js", "audio.js"],
+                    test_commands=["node --check game.js", "node --check audio.js"]
+                )
+                
+                if not res["success"]:
+                    print(f"\nIntegration repair task failed: {res.get('error')}")
+                    success = False
+                    state["status"] = "failed"
+                    store.save(goal_id, state, f"Integration repair failed: {res.get('error')}")
+                    break
+                    
+                print(f"Integration repair completed and merged successfully! Re-auditing...")
     else:
         # Format tasks for the PipelineCoordinator parallel execution API
         formatted_tasks = []
