@@ -35,3 +35,9 @@ python3 scripts/controller_goal.py --repo /path/to/target-workspace --goal "Your
 ```
 
 Refer to [bootstrap/antigravity-bootstrap.md](bootstrap/antigravity-bootstrap.md) for the full operational lifecycle.
+
+---
+
+## 4. Research-First & No-Placeholder Policy
+- **Research Mandatory**: Do not guess or write speculative/mock parameters. Before any design, task extraction, or code generation is finalized, search the web or consult local reference documentations to obtain precise mathematical formulas, accurate dataset arrays, configuration schemas, or real API payloads.
+- **Contract-Guided Specification**: The IntentExtractor planner must embed these gathered technical specifications directly into the descriptions of the extracted tasks so they act as strict implementation contracts for the developer agents.

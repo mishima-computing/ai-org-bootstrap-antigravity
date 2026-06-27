@@ -45,8 +45,9 @@ class AntigravityCarrier:
         """
         system_instructions = self._load_system_instructions()
         
-        # Determine if this is a write-capable role
-        is_write_role = self.role_name in [
+        # Determine if this role should be equipped with tools (search, terminal, write)
+        is_tool_equipped = self.role_name in [
+            "intent-extractor",
             "implementer",
             "functional-ci-action-writer",
             "security-ci-action-writer",
@@ -65,7 +66,7 @@ class AntigravityCarrier:
         config_kwargs = {
             "system_instructions": system_instructions
         }
-        if is_write_role:
+        if is_tool_equipped:
             config_kwargs["capabilities"] = CapabilitiesConfig()
             
         if vertex:

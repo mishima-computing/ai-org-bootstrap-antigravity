@@ -37,3 +37,12 @@ When using the Antigravity SDK tools (e.g., `run_command`, `edit_file`, etc.):
 - Always respect the sandbox limits.
 - Never write scripts that bypass the sandbox or try to run commands outside the workspace root.
 - Do not run interactive commands that block (like `top`, `nano`, or server start commands without background flags).
+
+---
+
+## 4. Research-First Discipline
+
+Before drafting any edit plan or writing any code, you **MUST** perform web search research or read local reference documentations to gather the exact technical specifications, parameters, formulas, or API schemas required for the implementation.
+- Never write placeholder functions or make assumptions about mathematical formulas, API responses, or data lists (such as monster stats, physics constants, or configuration flags).
+- Execute search queries to find the real-world standard values and verify them.
+- Document the gathered specifications in your output/comments.

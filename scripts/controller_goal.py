@@ -131,6 +131,7 @@ Guidelines:
 1. `files_allowed_to_change` lists ONLY the files that this task needs to create or modify. Do not include files that only need to be read.
 2. `verification_commands` lists commands that can be run deterministically to verify the correctness of the change (e.g. tests, linters).
 3. The output MUST be a valid JSON block. Do not include markdown code fences or any conversational prefix/suffix.
+4. Research-First: You MUST run search queries or read local reference documentations to obtain precise mathematical formulas, exact data lists, API specifications, or configuration structures required for the goal before finalizing the task descriptions. Include these gathered specifications and parameter arrays directly inside the description of the relevant tasks so that the developer agent does not use placeholder values.
 """
 
     response_content = ""
