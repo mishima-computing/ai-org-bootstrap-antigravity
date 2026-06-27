@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+.worktrees/
+.agent-runs/
+.goals/
+.venv/
+.goals/*.json
